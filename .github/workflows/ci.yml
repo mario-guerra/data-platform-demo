@@ -214,22 +214,22 @@ jobs:
 
     - name: Validate Docker Compose
       run: |
-        docker-compose config --quiet
+        docker compose config --quiet
 
     - name: Test Docker Compose (minimal)
       run: |
         # Start only essential services for testing
-        docker-compose up -d postgres minio
+        docker compose up -d postgres minio
         sleep 30
         
         # Basic health checks
-        docker-compose ps
+        docker compose ps
         
         # Check if services are responding
         curl -f http://localhost:9001/minio/health/live || echo "MinIO not ready"
         
         # Cleanup
-        docker-compose down
+        docker compose down
 
   security-scan:
     name: 'Security Scanning'
@@ -284,24 +284,24 @@ jobs:
     - name: Set up integration test environment
       run: |
         cp .env.example .env
-        docker-compose up -d kafka postgres minio
+        docker compose up -d kafka postgres minio
         sleep 60  # Wait for services to be ready
 
     - name: Run integration tests
       run: |
         # Test Kafka connectivity
-        docker-compose exec -T kafka kafka-topics.sh --list --bootstrap-server localhost:29092
+        docker compose exec -T kafka kafka-topics.sh --list --bootstrap-server localhost:29092
         
         # Test MinIO connectivity
         curl -f http://localhost:9001/minio/health/live
         
         # Test PostgreSQL connectivity
-        docker-compose exec -T postgres psql -U dataplatform -d dataplatform -c "SELECT 1;"
+        docker compose exec -T postgres psql -U dataplatform -d dataplatform -c "SELECT 1;"
 
     - name: Cleanup integration test
       if: always()
       run: |
-        docker-compose down
+        docker compose down
         docker system prune -f
 
   create-release:
