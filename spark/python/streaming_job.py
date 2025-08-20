@@ -9,19 +9,10 @@ import sys
 
 from delta import configure_spark_with_delta_pip
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import (
-    avg,
-    col,
-    count,
-    current_timestamp,
-    from_json,
-)
+from pyspark.sql.functions import avg, col, count, current_timestamp, from_json
 from pyspark.sql.functions import max as spark_max
 from pyspark.sql.functions import sum as spark_sum
-from pyspark.sql.functions import (
-    to_timestamp,
-    window,
-)
+from pyspark.sql.functions import to_timestamp, window
 from pyspark.sql.types import (
     DoubleType,
     IntegerType,
