@@ -1,0 +1,65 @@
+{
+  "name": "Data Platform Demo",
+  "image": "mcr.microsoft.com/devcontainers/python:3.10",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "11"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/azure-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.black-formatter",
+        "ms-python.flake8",
+        "vscjava.vscode-java-pack",
+        "scalameta.metals",
+        "hashicorp.terraform",
+        "ms-azuretools.vscode-azureterraform",
+        "redhat.vscode-yaml",
+        "ms-vscode.makefile-tools"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.formatting.provider": "black",
+        "python.linting.flake8Enabled": true,
+        "python.linting.enabled": true
+      }
+    }
+  },
+  "postCreateCommand": "pip install -r requirements-dev.txt && pre-commit install",
+  "forwardPorts": [
+    8080,
+    8443,
+    9000,
+    9001,
+    5000,
+    5432,
+    9092
+  ],
+  "portsAttributes": {
+    "8080": {
+      "label": "Kafka UI / Spark Master UI"
+    },
+    "8443": {
+      "label": "NiFi"
+    },
+    "9000": {
+      "label": "MinIO API"
+    },
+    "9001": {
+      "label": "MinIO Console"
+    },
+    "5000": {
+      "label": "MLflow"
+    },
+    "5432": {
+      "label": "PostgreSQL"
+    },
+    "9092": {
+      "label": "Kafka"
+    }
+  }
+}

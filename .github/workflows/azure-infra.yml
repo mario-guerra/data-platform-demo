@@ -1,0 +1,145 @@
+name: Azure Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Apply Terraform changes (true/false)'
+        required: true
+        default: 'false'
+        type: boolean
+      enable_aks:
+        description: 'Enable AKS cluster (additional cost)'
+        required: false
+        default: false
+        type: boolean
+      enable_adf:
+        description: 'Enable Azure Data Factory (additional cost)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  TF_VERSION: '1.6.0'
+  TF_WORKING_DIR: './infra/azure/terraform'
+
+jobs:
+  terraform:
+    name: 'Terraform Plan/Apply'
+    runs-on: ubuntu-latest
+    environment: azure
+    
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Azure Login via OIDC
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Terraform Init
+      run: |
+        terraform init \
+          -backend-config="resource_group_name=${{ vars.TF_STATE_RESOURCE_GROUP || 'rg-terraform-state' }}" \
+          -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE_ACCOUNT || 'tfstatedataplatform' }}" \
+          -backend-config="container_name=${{ vars.TF_STATE_CONTAINER || 'tfstate' }}" \
+          -backend-config="key=dataplatform.tfstate"
+
+    - name: Terraform Validate
+      run: terraform validate
+
+    - name: Terraform Plan
+      id: plan
+      run: |
+        terraform plan \
+          -var="enable_aks=${{ github.event.inputs.enable_aks }}" \
+          -var="enable_adf=${{ github.event.inputs.enable_adf }}" \
+          -out=tfplan
+
+    - name: Upload Plan Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: terraform-plan
+        path: ${{ env.TF_WORKING_DIR }}/tfplan
+
+    - name: Terraform Apply
+      if: github.event.inputs.apply == 'true'
+      run: terraform apply -auto-approve tfplan
+
+    - name: Terraform Output
+      if: github.event.inputs.apply == 'true'
+      id: output
+      run: |
+        echo "::group::Terraform Outputs"
+        terraform output
+        echo "::endgroup::"
+        
+        # Save sensitive outputs to step outputs
+        echo "eventhub_connection_string=$(terraform output -raw eventhub_connection_string)" >> $GITHUB_OUTPUT
+        echo "storage_account_name=$(terraform output -raw storage_account_name)" >> $GITHUB_OUTPUT
+        echo "eventhub_bootstrap_servers=$(terraform output -raw eventhub_bootstrap_servers)" >> $GITHUB_OUTPUT
+
+    - name: Post-deployment Instructions
+      if: github.event.inputs.apply == 'true'
+      run: |
+        echo "::notice title=Deployment Complete::Azure infrastructure has been deployed successfully!"
+        echo ""
+        echo "📋 **Next Steps:**"
+        echo "1. Update your local configuration with the new Azure endpoints"
+        echo "2. Configure Event Hubs connection string in your applications"
+        echo "3. Set up ABFS authentication for Spark jobs"
+        echo "4. Review cost estimation in terraform outputs"
+        echo ""
+        echo "📖 **Documentation:**"
+        echo "- See azure/README.md for configuration details"
+        echo "- Check terraform outputs for connection information"
+        echo ""
+        echo "💰 **Cost Monitoring:**"
+        echo "- Monitor Azure costs in the Azure portal"
+        echo "- Consider enabling budget alerts"
+        echo "- Review cost estimation in terraform outputs"
+
+    - name: Save Connection Info
+      if: github.event.inputs.apply == 'true'
+      run: |
+        cat > connection_info.md << EOF
+        # Azure Infrastructure Connection Information
+        
+        Generated on: $(date)
+        
+        ## Storage Account
+        - **Name**: ${{ steps.output.outputs.storage_account_name }}
+        - **ABFSS Base URL**: abfss://${{ steps.output.outputs.storage_account_name }}.dfs.core.windows.net
+        
+        ## Event Hubs
+        - **Bootstrap Servers**: ${{ steps.output.outputs.eventhub_bootstrap_servers }}
+        - **Connection String**: [REDACTED - Check GitHub Secrets]
+        
+        ## Containers
+        - Raw data: \`raw\`
+        - Delta tables: \`delta\` 
+        - MLflow artifacts: \`mlflow\`
+        
+        ## Configuration
+        See \`azure/README.md\` for detailed configuration instructions.
+        EOF
+
+    - name: Upload Connection Info
+      if: github.event.inputs.apply == 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        name: azure-connection-info
+        path: ${{ env.TF_WORKING_DIR }}/connection_info.md
